@@ -1,0 +1,79 @@
+# Canary deployment for content-service (10% traffic split)
+# Deploy alongside the stable deployment. Traffic split is achieved via
+# replica ratio: 1 canary : 9 stable (approx 10%).
+#
+# Usage:
+#   kubectl apply -f infra/k8s/content-service/deployment.yaml   # stable: 9 replicas
+#   kubectl apply -f infra/k8s/canary/                           # canary: 1 replica
+#
+# The content-service Service selects app=content-service (both stable + canary pods),
+# so Kubernetes load-balances ~10% to canary naturally.
+# To promote: update stable deployment image and scale canary to 0.
+# To rollback: scale canary to 0 or delete this deployment.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: content-service-canary
+  namespace: streaming
+  labels:
+    app: content-service
+    track: canary
+    version: "1.1.0"
+  annotations:
+    deployment.kubernetes.io/canary: "true"
+    deployment.kubernetes.io/canary-weight: "10"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: content-service
+      track: canary
+  template:
+    metadata:
+      labels:
+        app: content-service
+        track: canary
+        version: "1.1.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8082"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: content-service
+          image: ghcr.io/mini-streaming/content-service:canary
+          ports:
+            - containerPort: 8082
+              name: http
+          env:
+            - name: PORT
+              value: "8082"
+            - name: REDIS_HOST
+              value: "redis"
+            - name: REDIS_PORT
+              value: "6379"
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8082
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8082
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+      terminationGracePeriodSeconds: 30

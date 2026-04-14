@@ -1,0 +1,45 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: streaming-ingress
+  namespace: streaming
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: streaming.local
+      http:
+        paths:
+          - path: /users(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: user-service
+                port:
+                  number: 8081
+          - path: /content(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: content-service
+                port:
+                  number: 8082
+          - path: /playback(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: playback-service
+                port:
+                  number: 8083
+          - path: /(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8080

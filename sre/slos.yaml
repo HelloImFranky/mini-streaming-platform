@@ -1,0 +1,65 @@
+# Service Level Objectives — Mini Streaming Platform
+# Reviewed and owned by: Platform SRE Team
+# Review cadence: Monthly
+
+slos:
+  - slo_name: availability
+    description: >
+      The fraction of valid HTTP requests that receive a non-5xx response.
+      Measures end-to-end availability across all four services as observed
+      at the API gateway and individual service metrics.
+    metric_query: |
+      1 - (
+        sum(rate(http_requests_total{status=~"5.."}[30d]))
+        /
+        sum(rate(http_requests_total[30d]))
+      )
+    target: 0.999            # 99.9%
+    window: 30d
+    error_budget_minutes: 43 # 0.1% of 30d = 43.2 minutes
+    alert_rule: ErrorBudgetBurn
+    owners:
+      - platform-sre
+    linked_alerts:
+      - HighErrorRate
+      - ServiceDown
+
+  - slo_name: latency-p95
+    description: >
+      95th percentile request latency across all services must remain below
+      250ms. Measured using the http_request_duration_seconds histogram.
+      Covers all user-facing endpoints (content browse, user profile, playback).
+    metric_query: |
+      histogram_quantile(
+        0.95,
+        sum(rate(http_request_duration_seconds_bucket[30d])) by (le)
+      )
+    target: 0.250            # seconds
+    target_unit: seconds
+    window: 30d
+    error_budget_minutes: 43 # budget shared with availability window
+    alert_rule: HighLatencyP95
+    owners:
+      - platform-sre
+    linked_alerts:
+      - HighLatencyP95
+
+  - slo_name: error-rate
+    description: >
+      The rate of 5xx HTTP errors across all services must remain below 1%.
+      This SLO captures failure-mode behavior independently of availability
+      and is used to gate canary deployments in CI/CD.
+    metric_query: |
+      sum(rate(http_requests_total{status=~"5.."}[30d]))
+      /
+      sum(rate(http_requests_total[30d]))
+    target: 0.01             # 1% maximum error rate
+    target_unit: ratio
+    window: 30d
+    error_budget_minutes: 43
+    alert_rule: HighErrorRate
+    owners:
+      - platform-sre
+    linked_alerts:
+      - HighErrorRate
+      - ErrorBudgetBurn

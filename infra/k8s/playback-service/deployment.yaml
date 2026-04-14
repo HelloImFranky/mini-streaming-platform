@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: playback-service
+  namespace: streaming
+  labels:
+    app: playback-service
+    version: "1.0.0"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: playback-service
+  template:
+    metadata:
+      labels:
+        app: playback-service
+        version: "1.0.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8083"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: playback-service
+          image: ghcr.io/mini-streaming/playback-service:latest
+          ports:
+            - containerPort: 8083
+              name: http
+          env:
+            - name: PORT
+              value: "8083"
+            - name: LATENCY_SPIKE_PCT
+              value: "5"
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8083
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8083
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+      terminationGracePeriodSeconds: 30

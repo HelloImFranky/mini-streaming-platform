@@ -1,0 +1,114 @@
+version: "3.9"
+
+networks:
+  streaming-net:
+    name: streaming-net
+    driver: bridge
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - streaming-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  user-service:
+    build:
+      context: ./services/user-service
+      dockerfile: Dockerfile
+    container_name: user-service
+    ports:
+      - "8081:8081"
+    networks:
+      - streaming-net
+    environment:
+      - PORT=8081
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  content-service:
+    build:
+      context: ./services/content-service
+      dockerfile: Dockerfile
+    container_name: content-service
+    ports:
+      - "8082:8082"
+    networks:
+      - streaming-net
+    environment:
+      - PORT=8082
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8082/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  playback-service:
+    build:
+      context: ./services/playback-service
+      dockerfile: Dockerfile
+    container_name: playback-service
+    ports:
+      - "8083:8083"
+    networks:
+      - streaming-net
+    environment:
+      - PORT=8083
+      - LATENCY_SPIKE_PCT=5
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    ports:
+      - "8080:8080"
+    networks:
+      - streaming-net
+    environment:
+      - PORT=8080
+      - USER_SERVICE_URL=http://user-service:8081
+      - CONTENT_SERVICE_URL=http://content-service:8082
+      - PLAYBACK_SERVICE_URL=http://playback-service:8083
+    depends_on:
+      user-service:
+        condition: service_healthy
+      content-service:
+        condition: service_healthy
+      playback-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped

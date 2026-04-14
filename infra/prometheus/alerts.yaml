@@ -1,0 +1,86 @@
+groups:
+  - name: streaming_platform_alerts
+    interval: 30s
+    rules:
+
+      # -----------------------------------------------------------------------
+      # HighErrorRate — 5xx error rate > 1% sustained for 5 minutes
+      # -----------------------------------------------------------------------
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[5m])) by (service)
+            /
+            sum(rate(http_requests_total[5m])) by (service)
+          ) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate on {{ $labels.service }}"
+          description: >
+            Service {{ $labels.service }} has a 5xx error rate of
+            {{ printf "%.2f" $value | humanizePercentage }} over the last 5 minutes.
+            SLO target: < 1%.
+
+      # -----------------------------------------------------------------------
+      # HighLatencyP95 — p95 request latency > 250ms sustained for 5 minutes
+      # -----------------------------------------------------------------------
+      - alert: HighLatencyP95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (service, le)
+          ) > 0.25
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High p95 latency on {{ $labels.service }}"
+          description: >
+            Service {{ $labels.service }} p95 latency is {{ $value | humanizeDuration }}
+            (threshold: 250ms). Check upstream dependencies.
+
+      # -----------------------------------------------------------------------
+      # ServiceDown — instance not scraped for > 1 minute
+      # -----------------------------------------------------------------------
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: >
+            Prometheus cannot scrape {{ $labels.job }} (instance {{ $labels.instance }}).
+            The service has been unreachable for more than 1 minute.
+
+      # -----------------------------------------------------------------------
+      # ErrorBudgetBurn — multi-window burn rate (1h / 5m windows)
+      # Fires when the platform is burning through its 30-day error budget
+      # faster than 5× the sustainable rate.
+      # -----------------------------------------------------------------------
+      - alert: ErrorBudgetBurn
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[1h]))
+            /
+            sum(rate(http_requests_total[1h]))
+          ) > (5 * (1 - 0.999))
+          and
+          (
+            sum(rate(http_requests_total{status=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total[5m]))
+          ) > (5 * (1 - 0.999))
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Error budget burning too fast"
+          description: >
+            The platform is burning error budget at >5× the sustainable rate
+            (both 1h and 5m windows elevated). At this pace the 30-day budget
+            (43.2 min) will be exhausted prematurely.
+            Current 1h error rate: {{ $value | humanizePercentage }}.
+            Freeze non-critical deployments immediately.

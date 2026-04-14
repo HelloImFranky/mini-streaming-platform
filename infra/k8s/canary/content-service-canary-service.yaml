@@ -1,0 +1,22 @@
+# Dedicated service for canary — useful for targeting canary pods directly
+# (e.g., for smoke tests before promoting to stable).
+# Normal traffic flows through the main content-service Service.
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: content-service-canary
+  namespace: streaming
+  labels:
+    app: content-service
+    track: canary
+spec:
+  type: ClusterIP
+  selector:
+    app: content-service
+    track: canary
+  ports:
+    - name: http
+      port: 8082
+      targetPort: 8082
+      protocol: TCP

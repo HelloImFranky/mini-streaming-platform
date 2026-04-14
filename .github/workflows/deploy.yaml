@@ -1,0 +1,141 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  NAMESPACE: streaming
+  PROMETHEUS_URL: http://prometheus.streaming.svc.cluster.local:9090
+
+jobs:
+  deploy:
+    name: Canary → Full Rollout
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: "v1.29.0"
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Get image SHA
+        id: image
+        run: |
+          SHA=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)
+          echo "sha=${SHA}" >> $GITHUB_OUTPUT
+          echo "Deploying image SHA: ${SHA}"
+
+      # -----------------------------------------------------------------------
+      # Step 1: Deploy canary (content-service only — representative service)
+      # -----------------------------------------------------------------------
+      - name: Deploy canary (content-service)
+        run: |
+          kubectl set image deployment/content-service-canary \
+            content-service=${{ env.REGISTRY }}/${{ github.repository_owner }}/content-service:${{ steps.image.outputs.sha }} \
+            -n ${{ env.NAMESPACE }}
+
+          kubectl rollout status deployment/content-service-canary \
+            -n ${{ env.NAMESPACE }} \
+            --timeout=120s
+
+          echo "Canary deployed. Waiting 5 minutes for metrics to stabilize..."
+
+      - name: Wait for canary bake time (5 minutes)
+        run: sleep 300
+
+      # -----------------------------------------------------------------------
+      # Step 2: Query Prometheus for canary error rate
+      # -----------------------------------------------------------------------
+      - name: Check canary error rate via Prometheus
+        id: canary_check
+        run: |
+          set -euo pipefail
+
+          QUERY='sum(rate(http_requests_total{status=~"5..",track="canary"}[5m])) / sum(rate(http_requests_total{track="canary"}[5m]))'
+          ENCODED=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$QUERY'))")
+
+          RESULT=$(curl -sf \
+            "${{ env.PROMETHEUS_URL }}/api/v1/query?query=${ENCODED}" \
+            | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          results = data.get('data', {}).get('result', [])
+          if not results:
+              print('0')
+          else:
+              print(results[0]['value'][1])
+          ")
+
+          echo "Canary error rate: ${RESULT}"
+          echo "error_rate=${RESULT}" >> $GITHUB_OUTPUT
+
+          # Fail if error rate >= 1%
+          python3 -c "
+          rate = float('${RESULT}' or '0')
+          threshold = 0.01
+          if rate >= threshold:
+              print(f'ERROR: canary error rate {rate:.4f} >= threshold {threshold}')
+              exit(1)
+          else:
+              print(f'OK: canary error rate {rate:.4f} < threshold {threshold}')
+          "
+
+      # -----------------------------------------------------------------------
+      # Step 3a: Promote — full rollout to all services
+      # -----------------------------------------------------------------------
+      - name: Promote canary — full rollout
+        if: success()
+        run: |
+          echo "Canary healthy. Promoting to full rollout..."
+
+          for SVC in api-gateway user-service content-service playback-service; do
+            kubectl set image deployment/${SVC} \
+              ${SVC}=${{ env.REGISTRY }}/${{ github.repository_owner }}/${SVC}:${{ steps.image.outputs.sha }} \
+              -n ${{ env.NAMESPACE }}
+            kubectl rollout status deployment/${SVC} \
+              -n ${{ env.NAMESPACE }} \
+              --timeout=180s
+            echo "  ✓ ${SVC} promoted"
+          done
+
+          # Scale down canary now that stable is updated
+          kubectl scale deployment/content-service-canary \
+            --replicas=0 \
+            -n ${{ env.NAMESPACE }}
+
+          echo "Full rollout complete."
+
+      # -----------------------------------------------------------------------
+      # Step 3b: Rollback on canary failure
+      # -----------------------------------------------------------------------
+      - name: Rollback canary on failure
+        if: failure()
+        run: |
+          echo "Canary failed (error_rate=${{ steps.canary_check.outputs.error_rate }}). Rolling back..."
+
+          kubectl rollout undo deployment/content-service-canary -n ${{ env.NAMESPACE }}
+
+          echo "Rollback complete. Investigate before re-deploying."
+          exit 1
+
+      - name: Notify deployment result
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          SHA="${{ steps.image.outputs.sha }}"
+          echo "Deployment ${STATUS} for SHA ${SHA}"
+          echo "Error rate was: ${{ steps.canary_check.outputs.error_rate }}"
