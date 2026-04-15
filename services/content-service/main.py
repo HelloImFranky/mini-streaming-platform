@@ -1,7 +1,6 @@
 import json
 import os
 import time
-from typing import Optional
 
 import redis as redis_client
 from fastapi import FastAPI, HTTPException, Query, Request, Response
