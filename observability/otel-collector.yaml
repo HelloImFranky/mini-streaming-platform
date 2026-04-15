@@ -24,7 +24,7 @@ exporters:
     sampling_thereafter: 200
 
   prometheus:
-    endpoint: "0.0.0.0:8888"
+    endpoint: "0.0.0.0:8889"
     namespace: otel
 
 extensions:
