@@ -26,9 +26,11 @@ jobs:
           go-version: "1.21"
           cache-dependency-path: services/${{ matrix.service }}/go.sum
 
-      - name: Download modules
+      - name: Download and build modules
         working-directory: services/${{ matrix.service }}
-        run: go mod download
+        run: |
+          go mod download
+          go build ./...
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v4
