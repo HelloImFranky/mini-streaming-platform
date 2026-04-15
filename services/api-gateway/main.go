@@ -93,21 +93,25 @@ func newReverseProxy(target string) *httputil.ReverseProxy {
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 		log.Printf("proxy error for %s: %v", r.URL.Path, err)
 		w.WriteHeader(http.StatusBadGateway)
-		json.NewEncoder(w).Encode(map[string]string{
-			"error":   "upstream service unavailable",
-			"path":    r.URL.Path,
+		if err := json.NewEncoder(w).Encode(map[string]string{
+			"error":      "upstream service unavailable",
+			"path":       r.URL.Path,
 			"request_id": r.Header.Get("X-Request-ID"),
-		})
+		}); err != nil {
+			log.Printf("failed to encode error response: %v", err)
+		}
 	}
 	return proxy
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	if err := json.NewEncoder(w).Encode(map[string]string{
 		"status":  "ok",
 		"service": "api-gateway",
-	})
+	}); err != nil {
+		log.Printf("failed to encode health response: %v", err)
+	}
 }
 
 func main() {
@@ -147,7 +151,9 @@ func main() {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]string{"error": "route not found"})
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": "route not found"}); err != nil {
+			log.Printf("failed to encode 404 response: %v", err)
+		}
 	})
 
 	handler := loggingMiddleware(mux)

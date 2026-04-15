@@ -157,7 +157,9 @@ func startPlaybackHandler(w http.ResponseWriter, r *http.Request) {
 	var req StartRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "invalid request body"})
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": "invalid request body"}); err != nil {
+			log.Printf("failed to encode error response: %v", err)
+		}
 		return
 	}
 	if req.UserID == "" {
@@ -182,7 +184,9 @@ func startPlaybackHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(sess)
+	if err := json.NewEncoder(w).Encode(sess); err != nil {
+		log.Printf("failed to encode session response: %v", err)
+	}
 }
 
 func statusPlaybackHandler(w http.ResponseWriter, r *http.Request) {
@@ -198,13 +202,15 @@ func statusPlaybackHandler(w http.ResponseWriter, r *http.Request) {
 	sess, ok := store.Get(sessionID)
 	if !ok {
 		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]string{"error": "session not found"})
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": "session not found"}); err != nil {
+			log.Printf("failed to encode error response: %v", err)
+		}
 		return
 	}
 
 	elapsed := int(time.Since(sess.StartedAt).Seconds())
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"session_id":      sess.SessionID,
 		"user_id":         sess.UserID,
 		"content_id":      sess.ContentID,
@@ -212,15 +218,19 @@ func statusPlaybackHandler(w http.ResponseWriter, r *http.Request) {
 		"bitrate":         sess.Bitrate,
 		"elapsed_seconds": elapsed,
 		"started_at":      sess.StartedAt,
-	})
+	}); err != nil {
+		log.Printf("failed to encode status response: %v", err)
+	}
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	if err := json.NewEncoder(w).Encode(map[string]string{
 		"status":  "ok",
 		"service": "playback-service",
-	})
+	}); err != nil {
+		log.Printf("failed to encode health response: %v", err)
+	}
 }
 
 func main() {
