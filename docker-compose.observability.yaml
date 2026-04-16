@@ -43,7 +43,7 @@ services:
       - streaming-net
     environment:
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admintest123
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
     volumes:
@@ -64,7 +64,7 @@ services:
     ports:
       - "4317:4317"   # OTLP gRPC
       - "4318:4318"   # OTLP HTTP
-      - "8888:8888"   # Prometheus metrics (collector self-monitoring)
+      - "8889:8889"   # Prometheus metrics (collector self-monitoring)
     networks:
       - streaming-net
     volumes:

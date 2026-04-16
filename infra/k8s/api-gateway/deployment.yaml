@@ -23,6 +23,7 @@ spec:
     spec:
       containers:
         - name: api-gateway
+          imagePullPolicy: IfNotPresent
           image: ghcr.io/mini-streaming/api-gateway:latest
           ports:
             - containerPort: 8080

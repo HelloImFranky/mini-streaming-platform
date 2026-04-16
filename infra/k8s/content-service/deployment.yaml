@@ -26,6 +26,7 @@ spec:
     spec:
       containers:
         - name: content-service
+          imagePullPolicy: IfNotPresent
           image: ghcr.io/mini-streaming/content-service:latest
           ports:
             - containerPort: 8082
