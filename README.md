@@ -84,7 +84,7 @@ docker-compose -f docker-compose.observability.yaml up -d
 | Tool        | URL                           | Credentials  |
 |-------------|-------------------------------|--------------|
 | Prometheus  | http://localhost:9090         | —            |
-| Grafana     | http://localhost:3000         | admin / admin|
+| Grafana     | http://localhost:3000         |admin/admin123|
 | OTel        | grpc://localhost:4317         | —            |
 
 The Grafana **"Mini Streaming Platform"** dashboard is pre-provisioned — no manual setup required.
@@ -382,7 +382,7 @@ mini-streaming-platform/
 
 ## Dashboard Screenshots
 
-> _Start Grafana (`docker-compose -f docker-compose.observability.yaml up -d`) and navigate to http://localhost:3000 with admin/admin. The **"Mini Streaming Platform"** dashboard loads automatically._
+> _Start Grafana (`docker-compose -f docker-compose.observability.yaml up -d`) and navigate to http://localhost:3000 with admin/admin123. The **"Mini Streaming Platform"** dashboard loads automatically._
 
 Panels:
 - **Requests Per Second** — by service, 2-minute rate

@@ -59,7 +59,10 @@ services:
       retries: 3
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.96.0
+    build:
+      context: ./observability
+      dockerfile: Dockerfile.otel-collector
+    image: mini-streaming/otel-collector:local
     container_name: otel-collector
     ports:
       - "4317:4317"   # OTLP gRPC
@@ -70,6 +73,12 @@ services:
     volumes:
       - ./observability/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/bin/wget", "--quiet", "--tries=1", "--spider", "http://localhost:13133/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 volumes:
   prometheus-data:

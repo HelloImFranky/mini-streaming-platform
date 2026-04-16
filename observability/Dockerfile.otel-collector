@@ -1,0 +1,4 @@
+FROM otel/opentelemetry-collector-contrib:0.96.0
+
+COPY --from=busybox:1.36-musl /bin/busybox /bin/busybox
+COPY --from=busybox:1.36-musl /bin/busybox /bin/wget
