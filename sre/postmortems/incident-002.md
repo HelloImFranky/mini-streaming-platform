@@ -68,7 +68,7 @@ Resolution: remove the invalid key, and move the `prometheus` exporter endpoint 
 | 1 | Move `prometheus` exporter to `:8889` to avoid internal telemetry collision | SRE | Done | `observability/otel-collector.yaml` line 27 |
 | 2 | Publish `:8889` in compose ports list and update Prometheus scrape target | SRE | Done | `docker-compose.observability.yaml`, `infra/prometheus/prometheus.yml` |
 | 3 | Add `healthcheck:` to `otel-collector` compose service using `:13133/health` | SRE | Done | `docker-compose.observability.yaml`; custom image in `observability/Dockerfile.otel-collector` (vendor image is distroless — wget added via busybox multi-stage) |
-| 4 | Add CI step to validate OTel Collector config with `otelcol validate --config` | SRE | Pending | `.github/workflows/ci.yaml` |
+| 4 | Add CI step to validate OTel Collector config with `otelcol validate --config` | SRE | Done | `.github/workflows/ci.yaml` |
 | 5 | Document port reservations (4317 OTLP gRPC, 4318 OTLP HTTP, 8888 collector internal, 8889 prometheus exporter, 13133 health, 1777 pprof) | SRE | Pending | `observability/README.md` |
 | 6 | Add runbook entry: "otel-collector in restart loop — first steps" | SRE | Pending | `sre/runbooks/otel-collector.md` |
 
