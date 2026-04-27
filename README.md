@@ -278,25 +278,23 @@ kubectl rollout undo deployment/content-service-canary -n streaming
 ### Pipeline overview
 
 ```
-Push to branch → lint (Go + Python) → tests → validate-observability → build Docker images
-                                                                               │
-                                                                        Push to main?
-                                                                               │
-                                                                        push to GHCR
-                                                                               │
-                                                                   deploy.yaml triggers
-                                                                               │
-                                                                   kubectl set image (canary)
-                                                                               │
-                                                                        wait 5 minutes
-                                                                               │
-                                                             query Prometheus error rate
-                                                                  /          \
-                                                             < 1%            >= 1%
-                                                            promote          rollback
+Push to branch → lint (Go + Python) → tests → build Docker images
+                                                      │
+                                               Push to main?
+                                                      │
+                                               push to GHCR
+                                                      │
+                                          deploy.yaml triggers
+                                                      │
+                                          kubectl set image (canary)
+                                                      │
+                                           wait 5 minutes
+                                                      │
+                                    query Prometheus error rate
+                                         /          \
+                                    < 1%            >= 1%
+                                   promote          rollback
 ```
-
-`validate-observability` runs `otelcol validate --config` against `observability/otel-collector.yaml` on every push — catches schema errors before they reach any environment.
 
 ### Required secrets
 
@@ -356,19 +354,14 @@ mini-streaming-platform/
 │   ├── prometheus/           # prometheus.yml + alerts.yaml
 │   └── grafana/              # Auto-provisioned datasource + dashboard
 ├── observability/
-│   ├── otel-collector.yaml        # OpenTelemetry Collector config
-│   ├── Dockerfile.otel-collector  # Custom image — adds wget to distroless vendor image for healthcheck
-│   └── README.md                  # Port reservations + troubleshooting guide
+│   └── otel-collector.yaml   # OpenTelemetry Collector config
 ├── chaos/                    # Chaos experiment shell scripts
 ├── load-tests/               # k6 scripts: smoke, spike, soak
 ├── sre/
 │   ├── slos.yaml             # SLO definitions
 │   ├── error-budget.md       # Error budget policy and math
-│   ├── postmortems/
-│   │   ├── incident-001.md   # Redis connection pool exhaustion
-│   │   └── incident-002.md   # OTel Collector crash loop — port collision + config schema
-│   └── runbooks/
-│       └── otel-collector.md # On-call runbook: restart loop diagnosis + fix patterns
+│   └── postmortems/
+│       └── incident-001.md   # Redis connection pool exhaustion
 ├── .github/workflows/
 │   ├── ci.yaml               # lint + test + build
 │   └── deploy.yaml           # canary → promote/rollback
@@ -385,15 +378,11 @@ mini-streaming-platform/
   - Redis connection pool exhaustion caused content-service cache fallback to overload mock DB
   - Resolution: increased `max_connections=50`, added cache miss rate alerting, added chaos experiment to rotation
 
-- [INC-002 — OTel Collector Crash Loop](sre/postmortems/incident-002.md)
-  - Two misconfigurations: stale `file_format` key + port `:8888` collision between prometheus exporter and collector's internal telemetry server
-  - Resolution: moved exporter to `:8889`, added CI config validation, added compose healthcheck via custom distroless-compatible image, documented port reservations
-
 ---
 
 ## Dashboard Screenshots
 
-> _Start Grafana (`docker-compose -f docker-compose.observability.yaml up -d`) and navigate to http://localhost:3000 with admin/admintest123. The **"Mini Streaming Platform"** dashboard loads automatically._
+> _Start Grafana (`docker-compose -f docker-compose.observability.yaml up -d`) and navigate to http://localhost:3000 with admin/admin123. The **"Mini Streaming Platform"** dashboard loads automatically._
 
 Panels:
 - **Requests Per Second** — by service, 2-minute rate
