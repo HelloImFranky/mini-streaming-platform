@@ -204,29 +204,109 @@ k6 run -e BASE_URL=https://staging.example.com load-tests/smoke.js
 
 ## Chaos Engineering
 
-All experiments require `kubectl` configured for the `streaming` namespace.
+Two environments for chaos experiments — use the right one for each experiment:
+
+| Experiment | Environment | Why |
+|---|---|---|
+| Latency spike | docker-compose | Prometheus scrapes docker-compose services; alerts fire correctly |
+| Cache outage | docker-compose | Redis is a docker-compose service |
+| Pod kill | Kubernetes (minikube) | Demonstrates k8s self-healing — requires `kubectl` |
+
+---
+
+### Latency Spike (docker-compose)
+
+Injects 80% latency (500ms–2000ms) into playback-service for 3 minutes. Triggers `HighLatencyP95` alert.
+
+**Requires:** docker-compose stack running (`docker compose up -d`)
+
+Open **3 terminals** from the project root:
+
+**Terminal 1 — generate traffic:**
+```bash
+docker run --rm -i \
+  --network streaming-net \
+  -v $(pwd)/load-tests:/load-tests \
+  grafana/k6 run --duration 4m \
+  -e BASE_URL=http://api-gateway:8080 \
+  /load-tests/smoke.js
+```
+
+**Terminal 2 — inject latency (~15s after Terminal 1 starts):**
+```bash
+docker compose stop playback-service && \
+LATENCY_SPIKE_PCT=80 docker compose up -d playback-service
+```
+
+**Terminal 3 — confirm latency is being injected:**
+```bash
+docker logs -f playback-service
+# Look for: "injecting latency spike: XXXms"
+```
+
+**Watch the alert fire** in Prometheus (`http://localhost:9090` → Alerts tab).
+Query to visualize in Graph view:
+```
+histogram_quantile(0.95,
+  rate(http_request_duration_seconds_bucket{service="playback-service"}[1m])
+)
+```
+
+**Reset after experiment:**
+```bash
+docker compose stop playback-service && \
+LATENCY_SPIKE_PCT=5 docker compose up -d playback-service
+```
+
+**Key learning:** Scaling replicas does NOT fix this — the synthetic sleep runs in every pod. The correct fix is removing the root cause (patching the env var). Scaling only helps when latency is caused by resource contention, not a per-request code path.
+
+---
+
+### Cache Outage (docker-compose)
+
+Takes Redis offline for 90s. Verifies content-service falls back to mock DB gracefully.
+
+**Requires:** docker-compose stack running (`docker compose up -d`)
 
 ```bash
-# Kill a random pod and verify Kubernetes self-heals in 60s
-bash chaos/pod-kill.sh
-
-# Kill a specific service's pod
-bash chaos/pod-kill.sh --service content-service
-
-# Inject 80% latency spike into playback-service for 2 minutes
-bash chaos/latency-spike.sh
-
-# Take Redis offline for 90s — verify content-service fallback
 bash chaos/cache-outage.sh
 ```
 
+Watch cache hit rate drop to 0% in Grafana. Content requests should still return 200s (via fallback) but with higher latency.
+
+---
+
+### Pod Kill (Kubernetes)
+
+Kills a random pod and verifies Kubernetes self-heals within 60s.
+
+**Requires:** minikube running with manifests applied (see [Kubernetes](#kubernetes) section)
+
+**Terminal 1 — watch pods:**
+```bash
+kubectl -n streaming get pods -w
+```
+
+**Terminal 2 — kill a pod:**
+```bash
+# Random pod
+bash chaos/pod-kill.sh
+
+# Target a specific service
+bash chaos/pod-kill.sh --service content-service
+```
+
+Watch the killed pod go `Terminating` → new pod appear `ContainerCreating` → `Running 1/1` — typically under 15 seconds on minikube.
+
+---
+
 ### Expected Outcomes
 
-| Experiment       | Expected Behavior                                    |
-|------------------|------------------------------------------------------|
-| Pod kill         | Replacement pod running within 60s                   |
-| Latency spike    | `HighLatencyP95` alert fires; auto-resets after 2min |
-| Cache outage     | 0% cache hit rate; 200s still served via mock DB     |
+| Experiment    | Expected Behavior                                           |
+|---------------|-------------------------------------------------------------|
+| Latency spike | `HighLatencyP95` alert fires within 2m; p95 drops on reset |
+| Cache outage  | Cache hit rate → 0%; requests still succeed via fallback    |
+| Pod kill      | Replacement pod running within 60s; replica count restored  |
 
 ---
 

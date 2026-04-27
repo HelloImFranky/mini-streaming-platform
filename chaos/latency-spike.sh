@@ -21,7 +21,7 @@ DEPLOYMENT="playback-service"
 CONTAINER="playback-service"
 SPIKE_PCT=80
 BASELINE_PCT=5
-CHAOS_DURATION=120  # seconds
+CHAOS_DURATION=180  # seconds
 
 echo "=========================================="
 echo "  CHAOS: Latency Spike Injection"
