@@ -9,7 +9,7 @@
 # Expected behavior:
 #   - cache_misses_total counter spikes (all requests are cache misses)
 #   - cache_hits_total counter drops to 0
-#   - /health returns {"redis":"disconnected"} but overall status remains "ok"
+#   - /health returns {"redis":"degraded"} but overall status remains "ok"
 #   - /content/* continues to return 200 responses (fallback active)
 #   - No 5xx errors on content endpoints
 #

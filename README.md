@@ -275,14 +275,14 @@ bash chaos/cache-outage.sh
 
 Expected output every 10s during the outage:
 ```
-[14:32:15] [10/90s] health=200 redis=disconnected content=200 ✓ fallback active
+[14:32:15] [10/90s] health=200 redis=degraded content=200 ✓ fallback active
 ```
 
 **Terminal 2 — watch the health endpoint change in real time:**
 ```bash
 while true; do curl -s http://localhost:8082/health; echo; sleep 3; done
-# During outage:  {"status":"ok","redis":"disconnected"}
-# After restore:  {"status":"ok","redis":"connected"}
+# During outage:  {"status":"ok","redis":"degraded"}
+# After restore:  {"status":"ok","redis":"ok"}
 ```
 
 **Prometheus queries to watch** (`http://localhost:9090` → Graph):
