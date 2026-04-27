@@ -10,19 +10,20 @@ env:
   REGISTRY: ghcr.io
   NAMESPACE: streaming
   PROMETHEUS_URL: http://prometheus.streaming.svc.cluster.local:9090
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   deploy:
     name: Canary → Full Rollout
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' && vars.CLUSTER_READY == 'true' }}
     environment: production
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up kubectl
-        uses: azure/setup-kubectl@v3
+        uses: azure/setup-kubectl@v4
         with:
           version: "v1.29.0"
 

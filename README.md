@@ -400,12 +400,22 @@ Push to branch → lint (Go + Python) → tests → validate-observability → b
 
 `validate-observability` runs `otelcol validate --config` against `observability/otel-collector.yaml` on every push — catches schema errors before they reach any environment.
 
-### Required secrets
+### Deploy gate
 
-| Secret           | Description                                    |
-|------------------|------------------------------------------------|
-| `KUBECONFIG`     | Base64-encoded kubeconfig for production cluster |
-| `GITHUB_TOKEN`   | Auto-provided by GitHub Actions (GHCR push)    |
+The deploy job is gated behind a repository variable `CLUSTER_READY`. Without it the job is skipped cleanly — no kubectl errors, no cascading failures.
+
+To enable deployments when a real cluster is available:
+1. GitHub repo → **Settings → Variables → Actions → New repository variable**
+2. Name: `CLUSTER_READY` / Value: `true`
+3. Set the `KUBECONFIG` secret (base64-encoded kubeconfig for the target cluster)
+
+### Required secrets and variables
+
+| Name | Type | Description |
+|---|---|---|
+| `KUBECONFIG` | Secret | Base64-encoded kubeconfig for production cluster |
+| `GITHUB_TOKEN` | Secret | Auto-provided by GitHub Actions (GHCR push) |
+| `CLUSTER_READY` | Variable | Set to `true` to enable the deploy job |
 
 ---
 
