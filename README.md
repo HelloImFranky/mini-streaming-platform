@@ -264,15 +264,37 @@ LATENCY_SPIKE_PCT=5 docker compose up -d playback-service
 
 ### Cache Outage (docker-compose)
 
-Takes Redis offline for 90s. Verifies content-service falls back to mock DB gracefully.
+Stops Redis for 90 seconds. Verifies content-service falls back to mock DB gracefully — no 5xx errors, availability SLO holds.
 
 **Requires:** docker-compose stack running (`docker compose up -d`)
 
+**Terminal 1 — run the experiment:**
 ```bash
 bash chaos/cache-outage.sh
 ```
 
-Watch cache hit rate drop to 0% in Grafana. Content requests should still return 200s (via fallback) but with higher latency.
+Expected output every 10s during the outage:
+```
+[14:32:15] [10/90s] health=200 redis=disconnected content=200 ✓ fallback active
+```
+
+**Terminal 2 — watch the health endpoint change in real time:**
+```bash
+while true; do curl -s http://localhost:8082/health; echo; sleep 3; done
+# During outage:  {"status":"ok","redis":"disconnected"}
+# After restore:  {"status":"ok","redis":"connected"}
+```
+
+**Prometheus queries to watch** (`http://localhost:9090` → Graph):
+```
+# Cache miss rate — spikes to 100% during outage
+rate(cache_misses_total[1m])
+
+# Cache hit ratio — drops to 0, recovers after Redis restores
+rate(cache_hits_total[1m]) / (rate(cache_hits_total[1m]) + rate(cache_misses_total[1m]))
+```
+
+**Key learning:** The content-service has a fallback path to the mock DB when Redis is unreachable. Availability SLO (error rate < 1%) holds during the outage. The cost is latency — mock DB is slower than Redis. This is a deliberate tradeoff: protect error rate at the expense of p95 latency.
 
 ---
 
